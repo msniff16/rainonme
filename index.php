@@ -1,6 +1,7 @@
 <?php
 include('lib/forecast.io.php');
 include('twilio/sms-request.php');
+require('db_connection.php');
 
 $api_key = 'eccf1a4ed86ba49e6fdeeea0885ce363';
 
