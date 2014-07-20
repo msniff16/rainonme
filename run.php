@@ -17,12 +17,14 @@ for($iii=0; $iii<$allUsers; $iii++) {
     $phonenumber = mysql_result($getUsers,$iii,'phonenumber');
     $latitude = mysql_result($getUsers,$iii,'latitude');
     $longitude = mysql_result($getUsers,$iii,'longitude');
+    $minutealerts = mysql_result($getUsers,$iii,'minuteAlerts');
+    $houralerts = mysql_result($getUsers,$iii,'hourAlerts');
     $dailysummary = mysql_result($getUsers,$iii,'dailysummary');
     $hourofreport = mysql_result($getUsers,$iii,'hourofreport');
     $weeklysummary = mysql_result($getUsers,$iii,'weeklysummary');
     $maxalerts = mysql_result($getUsers,$iii,'maxalerts');
 
     //request report for this user
-    requestReport($emailaddress, $location, $phonenumber, $latitude, $longitude, $dailysummary, $hourofreport, $weeklysummary, $maxalerts);
+    requestReport($phonenumber, $latitude, $longitude, $minutelyreport, $hourlyreport, $dailysummary, $hourofreport, $weeklysummary, $maxalerts);
 
 }

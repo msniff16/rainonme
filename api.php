@@ -4,23 +4,21 @@ include('lib/forecast.io.php');
 include('twilio/sms-request.php');
 require('db_connection.php');
 
-//TO DO: get their time zone to send messages on their time!!!
-
 //Request full weather report based on user data
-function requestReport($emailaddress, $location, $phonenumber, $latitude, $longitude, $dailysummary, $hourofreport, $weeklysummary, $maxalerts) {
+function requestReport($location, $phonenumber, $latitude, $longitude, $minutelyreport, $hourlyreport, $dailysummary, $hourofreport, $weeklysummary, $maxalerts) {
 
   //API Key
   $api_key = 'eccf1a4ed86ba49e6fdeeea0885ce363';
 
-  //New forecast class
-  $forecast = new ForecastIO($api_key);
-
-  //send to this number
-  $to = $phonenumber;
-
   //Set timezone based on lat/long
   $currentTimeZone = getClosestTimezone($latitude, $longitude, 'US');
   date_default_timezone_set($currentTimeZone);
+
+  //New forecast class
+  $forecast = new ForecastIO($api_key, $currentTimeZone);
+
+  //send to this number
+  $to = $phonenumber;
 
   //Times
   $currentday = substr(date('d:H:i:s',time()),0,2);
@@ -30,89 +28,93 @@ function requestReport($emailaddress, $location, $phonenumber, $latitude, $longi
   $dayofweek = jddayofweek ( cal_to_jd(CAL_GREGORIAN, date("m"),date("d"), date("Y")) , 1 );
 
   /* GET MINUTELY CHANCES OF RAIN */
-  $conditions_today = $forecast->getForecastTodayMinute($latitude, $longitude);
+  if($minutelyreport == 1) {
 
-  foreach($conditions_today as $cond) {
+    $conditions_today = $forecast->getForecastTodayMinute($latitude, $longitude);
 
-    // 0.002 in./hr. corresponds to very light precipitation,
-    // 0.017 in./hr. corresponds to light precipitation,
-    // 0.1 in./hr. corresponds to moderate precipitation,
-    // and 0.4 in./hr. corresponds to heavy precipitation.
-    $intensity = $cond->getPrecipIntensity();
-    if($intensity < 0.002) {
-      $rate = "drizzling";
-    }
-    if($intensity >= 0.002) {
-      $rate = "raining very lightly";
-    }
-    if($intensity >= 0.017) {
-      $rate = "light raining";
-    }
-    if($intensity >= 0.1) {
-      $rate = "moderately raining";
-    }
-    if($intensity >= 0.4) {
-      $rate = "heavy raining";
-    }
+    foreach($conditions_today as $cond) {
 
-    //Assume it is going to rain (>=70%)
-    if($cond->getPrecipProbability() >= .70) {
+      // 0.002 in./hr. corresponds to very light precipitation,
+      // 0.017 in./hr. corresponds to light precipitation,
+      // 0.1 in./hr. corresponds to moderate precipitation,
+      // and 0.4 in./hr. corresponds to heavy precipitation.
+      $intensity = $cond->getPrecipIntensity();
+      if($intensity < 0.002) {
+        $rate = "drizzling";
+      }
+      if($intensity >= 0.002) {
+        $rate = "raining very lightly";
+      }
+      if($intensity >= 0.017) {
+        $rate = "light raining";
+      }
+      if($intensity >= 0.1) {
+        $rate = "moderately raining";
+      }
+      if($intensity >= 0.4) {
+        $rate = "heavy raining";
+      }
 
-        //Minutes until rainfall
-        $rainMinute = substr($cond->getTime('H:i:s'),3,2);
-        $timeDiff = $currentMinute - $rainMinute;
+      //Assume it is going to rain (>=70%)
+      if($cond->getPrecipProbability() >= .70) {
 
-        //It is raining, send a message
-        if($timeDiff == 0 && ($cond->getPrecipProbability() == 1)) {
+          //Minutes until rainfall
+          $rainMinute = substr($cond->getTime('H:i:s'),3,2);
+          $timeDiff = $currentMinute - $rainMinute;
 
-          //log report that it is raining
-          $message = "It is currently " . $rate;
-          logMessage($emailaddress, $message, "raining", time());
+          //It is raining, send a message
+          if($timeDiff == 0 && ($cond->getPrecipProbability() == 1)) {
 
-          //don't exceed max alerts
-          getRainfallMessagesSentToday($emailaddress, $maxalerts);
+            //log report that it is raining
+            $message = "It is currently " . $rate;
+            logMessage($phonenumbe, $message, "raining", time());
 
-          //last raining report within 2 hours
-          $lastReport = getLastRainingReport($emailaddress);
+            //don't exceed max alerts
+            getRainfallMessagesSentToday($phonenumber, $maxalerts);
 
-          //hasn't rained in 2 hours
-          if($lastReport == false) {
+            //last raining report within 2 hours
+            $lastReport = getLastRainingReport($phonenumber);
 
-            //send message
-            sendMessage($to, $message);
+            //hasn't rained in 2 hours
+            if($lastReport == false) {
 
-          }
+              //send message
+              sendMessage($to, $message);
 
-          //end loop
-          break;
+            }
 
-        }
-
-        //It will rain in XX minutes
-        else {
-
-          //log impending rainfall report
-          $message = "It will be " . $rate . " in " . $timeDiff . " minutes";
-          logMessage($emailaddress, $message, "impendingrainfall", time());
-
-          //don't exceed max alerts
-          getRainfallMessagesSentToday($emailaddress, $maxalerts);
-
-          //last impendingrainfallreport within 2 hours
-          $lastReport = getLastImpendingRainfallReport($emailaddress);
-
-          //hasn't rained in 2 hours
-          if($lastReport == false) {
-
-            //send message
-            sendMessage($to, $message);
+            //end loop
+            break;
 
           }
 
-          //end loop
-          break;
+          //It will rain in XX minutes
+          else {
 
-        }
+            //log impending rainfall report
+            $message = "It will be " . $rate . " in " . $timeDiff . " minutes";
+            logMessage($phonenumber, $message, "impendingrainfall", time());
+
+            //don't exceed max alerts
+            getRainfallMessagesSentToday($phonenumber, $maxalerts);
+
+            //last impendingrainfallreport within 2 hours
+            $lastReport = getLastImpendingRainfallReport($phonenumber);
+
+            //hasn't rained in 2 hours
+            if($lastReport == false) {
+
+              //send message
+              sendMessage($to, $message);
+
+            }
+
+            //end loop
+            break;
+
+          }
+
+      }
 
     }
 
@@ -120,77 +122,82 @@ function requestReport($emailaddress, $location, $phonenumber, $latitude, $longi
 
   /* GET HOURLY CHANCES */
 
-  $conditions_today = $forecast->getForecastTodayHourly($latitude, $longitude);
+  if($hourlyreport == 1) {
 
-  foreach($conditions_today as $cond) {
+    $conditions_today = $forecast->getForecastTodayHourly($latitude, $longitude);
 
-    //Good chance of Rain (>=60%)
-    if($cond->getPrecipProbability() >= .60) {
+    foreach($conditions_today as $cond) {
 
-        //minutes until raining
-        $rainHour = substr($cond->getTime('H:i:s'),0,2);
-        $timeDiff = $currentHour - $rainHour;
+      //Good chance of Rain (>=60%)
+      if($cond->getPrecipProbability() >= .60) {
 
-        // 0.002 in./hr. corresponds to very light precipitation,
-        // 0.017 in./hr. corresponds to light precipitation,
-        // 0.1 in./hr. corresponds to moderate precipitation,
-        // and 0.4 in./hr. corresponds to heavy precipitation.
+          //minutes until raining
+          $rainHour = substr($cond->getTime('H:i:s'),0,2);
+          $timeDiff = $currentHour - $rainHour;
 
-        $intensity = $cond->getPrecipIntensity();
+          // 0.002 in./hr. corresponds to very light precipitation,
+          // 0.017 in./hr. corresponds to light precipitation,
+          // 0.1 in./hr. corresponds to moderate precipitation,
+          // and 0.4 in./hr. corresponds to heavy precipitation.
 
-        if($intensity < 0.002) {
-          $rate = "drizzling";
-        }
-        if($intensity >= 0.002) {
-          $rate = "raining very lightly";
-        }
-        if($intensity >= 0.017) {
-          $rate = "light raining";
-        }
-        if($intensity >= 0.1) {
-          $rate = "moderately raining";
-        }
-        if($intensity >= 0.4) {
-          $rate = "heavy raining";
-        }
+          $intensity = $cond->getPrecipIntensity();
 
-        //time difference > 1 hour (would be covered by minutely report already)
-        if($timeDiff > 1) {
+          if($intensity < 0.002) {
+            $rate = "drizzling";
+          }
+          if($intensity >= 0.002) {
+            $rate = "raining very lightly";
+          }
+          if($intensity >= 0.017) {
+            $rate = "light raining";
+          }
+          if($intensity >= 0.1) {
+            $rate = "moderately raining";
+          }
+          if($intensity >= 0.4) {
+            $rate = "heavy raining";
+          }
 
-          //log impending rainfall report
-          $message = $cond->getPrecipProbability() * 100 . "% chance of rain in " . $timeDiff . " hours";
-          logMessage($emailaddress, $message, "rainhoursaway", time());
+          //time difference > 1 hour (would be covered by minutely report already)
+          if($timeDiff > 1) {
 
-          //don't exceed max alerts
-          getRainfallMessagesSentToday($emailaddress, $maxalerts);
+            //log impending rainfall report
+            $message = $cond->getPrecipProbability() * 100 . "% chance of rain in " . $timeDiff . " hours";
+            logMessage($phonenumber, $message, "rainhoursaway", time());
 
-          //last impendingrainfallreport within 2 hours
-          $lastReport = getLastRainHoursAwayReport($emailaddress);
+            //don't exceed max alerts
+            getRainfallMessagesSentToday($phonenumber, $maxalerts);
 
-          //hasn't rained in 2 hours
-          if($lastReport == false) {
+            //last impendingrainfallreport within 2 hours
+            $lastReport = getLastRainHoursAwayReport($phonenumber);
 
-            //send message
-            sendMessage($to, $message);
+            //hasn't rained in 2 hours
+            if($lastReport == false) {
+
+              //send message
+              sendMessage($to, $message);
+
+            }
+
+            //end loop
+            break;
 
           }
 
-          //end loop
-          break;
-
-        }
+      }
 
     }
 
   }
 
+
   /*  Daily and Weekly Weather Report Summaries  */
 
   //Daily Reports (sent at hour specified by user)
-  if($hourofreport == $currentHour) {
+  if($hourofreport == $currentHour && $dailysummary == 1) {
 
       //see if daily report already sent. If so, continue;
-      $reportSent = getLastDailyReport($emailaddress, $currentday);
+      $reportSent = getLastDailyReport($phonenumber, $currentday);
 
       //report not sent yet
       if($reportSent == false) {
@@ -200,17 +207,17 @@ function requestReport($emailaddress, $location, $phonenumber, $latitude, $longi
         sendMessage($to, $message);
 
         //log daily report
-        logMessage($emailaddress, $message, "dailyreport", time());
+        logMessage($phonenumber, $message, "dailyreport", time());
 
       }
 
   }
 
   //Weekly Reports (sent once a week on sunday mornings)
-  if(($hourofreport == $currentHour) && $dayofweek == "Sunday") {
+  if(($hourofreport == $currentHour) && $dayofweek == "Sunday" && $weeklysummary == 1) {
 
       //see if daily report already sent. If so, continue;
-      $reportSent = getLastWeeklyReport($emailaddress, $currentday);
+      $reportSent = getLastWeeklyReport($phonenumber, $currentday);
 
       //report not sent yet
       if($reportSent == false) {
@@ -221,7 +228,7 @@ function requestReport($emailaddress, $location, $phonenumber, $latitude, $longi
         sendMessage($to, $message);
 
         //log weekly report
-        logMessage($emailaddress, $message, "weeklyreport", time());
+        logMessage($phonenumber, $message, "weeklyreport", time());
 
       }
 
@@ -231,20 +238,20 @@ function requestReport($emailaddress, $location, $phonenumber, $latitude, $longi
 
 
 //Log messages
-function logMessage($emailaddress, $message, $report, $time) {
+function logMessage($phonenumber, $message, $report, $time) {
 
-  $logMessage = mysql_query("INSERT INTO messages (emailaddress, message, report, time) VALUES ('$emailaddress', '$message', '$report', '$time')");
+  $logMessage = mysql_query("INSERT INTO messages (phonenumber, message, report, time) VALUES ('$phonenumber', '$message', '$report', '$time')");
 
 }
 
 //Number of rainfall messages sent today
-function getRainfallMessagesSentToday($emailaddress, $maxalerts) {
+function getRainfallMessagesSentToday($phonenumber, $maxalerts) {
 
     //last midnight
     $midnight = strtotime('today midnight');
 
     //get number of messages sent (impendingrainfall or rainfall types and time greater than last midnight)
-    $getMessagesSent = mysql_query("SELECT time FROM messages WHERE emailaddress = '$emailaddress' AND (report = 'raining' || report = 'impendingrainfall') AND time > '$midnight' ORDER BY id DESC LIMIT 1");
+    $getMessagesSent = mysql_query("SELECT time FROM messages WHERE phonenumber = '$phonenumber' AND (report = 'raining' || report = 'impendingrainfall') AND time > '$midnight' ORDER BY id DESC LIMIT 1");
     $numSent = mysql_num_rows($getMessagesSent);
 
     //check if > maxalerts
@@ -255,10 +262,10 @@ function getRainfallMessagesSentToday($emailaddress, $maxalerts) {
 }
 
 //Last "raining" report sent today
-function getLastRainingReport($emailaddress) {
+function getLastRainingReport($phonenumber) {
 
     //get last daily report sent
-    $getLastReport = mysql_query("SELECT time FROM messages WHERE emailaddress = '$emailaddress' AND report = 'raining' ORDER BY id DESC LIMIT 1");
+    $getLastReport = mysql_query("SELECT time FROM messages WHERE phonenumber = '$phonenumber' AND report = 'raining' ORDER BY id DESC LIMIT 1");
     $lastReport = mysql_result($getLastReport,0,'time');
 
     if(!$lastReport) {
@@ -280,7 +287,7 @@ function getLastRainingReport($emailaddress) {
 function getLastImpendingRainfallReport() {
 
     //get last daily report sent
-    $getLastReport = mysql_query("SELECT time FROM messages WHERE emailaddress = '$emailaddress' AND report = 'impendingrainfall' ORDER BY id DESC LIMIT 1");
+    $getLastReport = mysql_query("SELECT time FROM messages WHERE phonenumber = '$phonenumber' AND report = 'impendingrainfall' ORDER BY id DESC LIMIT 1");
     $lastReport = mysql_result($getLastReport,0,'time');
 
     if(!$lastReport) {
@@ -298,10 +305,10 @@ function getLastImpendingRainfallReport() {
 }
 
 //Last "impendingrainfall" report sent today
-function getLastRainHoursAwayReport($emailaddress) {
+function getLastRainHoursAwayReport($phonenumber) {
 
     //get last daily report sent
-    $getLastReport = mysql_query("SELECT time FROM messages WHERE emailaddress = '$emailaddress' AND report = 'rainhoursaway' ORDER BY id DESC LIMIT 1");
+    $getLastReport = mysql_query("SELECT time FROM messages WHERE phonenumber = '$phonenumber' AND report = 'rainhoursaway' ORDER BY id DESC LIMIT 1");
     $lastReport = mysql_result($getLastReport,0,'time');
 
     if(!$lastReport) {
@@ -320,10 +327,10 @@ function getLastRainHoursAwayReport($emailaddress) {
 }
 
 //See if report sent today
-function getLastDailyReport($emailaddress, $currentday) {
+function getLastDailyReport($phonenumber, $currentday) {
 
     //get last daily report sent
-    $getLastReport = mysql_query("SELECT time FROM messages WHERE emailaddress = '$emailaddress' AND report = 'dailyreport' ORDER BY id DESC LIMIT 1");
+    $getLastReport = mysql_query("SELECT time FROM messages WHERE phonenumber = '$phonenumber' AND report = 'dailyreport' ORDER BY id DESC LIMIT 1");
     $lastReport = mysql_result($getLastReport,0,'time');
 
     if(!$lastReport) {
@@ -342,10 +349,10 @@ function getLastDailyReport($emailaddress, $currentday) {
 }
 
 //See if report sent today
-function getLastWeeklyReport($emailaddress, $currentday) {
+function getLastWeeklyReport($phonenumber, $currentday) {
 
     //get last daily report sent
-    $getLastReport = mysql_query("SELECT time FROM messages WHERE emailaddress = '$emailaddress' AND report = 'weeklyreport' ORDER BY id DESC LIMIT 1");
+    $getLastReport = mysql_query("SELECT time FROM messages WHERE phonenumber = '$phonenumber' AND report = 'weeklyreport' ORDER BY id DESC LIMIT 1");
     $lastReport = mysql_result($getLastReport,0,'time');
 
     if(!$lastReport) {

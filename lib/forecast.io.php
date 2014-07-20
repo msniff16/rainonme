@@ -3,9 +3,6 @@
  * Helper Class for forecast.io webservice
  */
 
-//set timezone
-date_default_timezone_set('America/Los_Angeles');
-
 class ForecastIO{
 
   private $api_key;
@@ -17,10 +14,11 @@ class ForecastIO{
    *
    * @param String $api_key
    */
-  function __construct($api_key) {
+  function __construct($api_key, $currentTimeZone) {
 
     $this->api_key = $api_key;
-
+    //set timezone
+    date_default_timezone_set($currentTimeZone);
 
   }
 
@@ -179,7 +177,7 @@ class ForecastIO{
 
     if ($data !== false) {
 
-      echo $data->minutely->summary;
+      return $data->minutely->summary;
 
     } else {
 
@@ -196,7 +194,7 @@ class ForecastIO{
 
     if ($data !== false) {
 
-      echo $data->hourly->summary;
+      return $data->hourly->summary;
 
     } else {
 
@@ -213,7 +211,7 @@ class ForecastIO{
 
     if ($data !== false) {
 
-      echo $data->daily->summary;
+      return $data->daily->summary;
 
     } else {
 
